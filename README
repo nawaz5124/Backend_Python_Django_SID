@@ -1,0 +1,325 @@
+1. Donor Management System
+
+Donor Management System (DOMAAP)
+A full-stack donation management platform with Stripe integration for one-off and monthly donations, built using Django (Backend) and Next.js (Frontend).
+
+
+Live and Development Links
+Production: https://camelfoundation.org  
+Development: https://cftdomaap-dev.camelfoundation.org  
+SIT/UAT with NGROK: https://camelfoundation-domaap.ngrok.app
+
+It supports multiple environments like:
+-  localhost
+- IP-based servers
+- Public `ngrok` tunnels
+
+# Tech Stack
+	- Python Django (Backend)
+	- PostgreSQL (Database)
+	- Stripe Integration (One-Off & Monthly)
+	- WT Authentication
+     -    Cookie-based (Web)
+     -    Header-based (API/Mobile)
+     -    NGINX , WSGI (Gunicorn)
+
+
+# Features
+
+- Secure JWT Authentication
+  - Cookie & Header-based login
+-  Stripe Integration
+  -  One-Off Donations
+  -  Monthly Subscriptions
+-  Auto-generated PDF Receipts
+- Webhook Handling
+  - /api/webhook/
+  - /api/stripe/subscription-webhook/
+- Admin Dashboard
+  - Donation , Donor Models/Tables
+  - Payment Tracker
+  - Reports (with PDF/Excel) - Coming Soon
+-  Multi-Environment `.env` Configurations
+  - .env, .env_ip, .env_ngrok`
+- Hosting
+  - localhost
+  - godaddy VPS (unix box)
+
+
+
+
+
+2. Setup Virtual Environment
+python3 -m venv venv
+source venv/bin/activate
+
+
+
+3. Install Dependencies
+pip install -r requirements.txt
+
+
+
+4. Choose an Environment File
+
+Choose based on use case and copy to .env:
+cp .env_ip .env         # For IP-based testing
+# or
+cp .env_ngrok .env      # For public webhook testing
+# or
+cp .env .env            # Default localhost
+
+
+
+5. Run Migrations
+python manage.py migrate
+
+
+
+6. Run the Server
+python manage.py runserver
+
+
+
+Example .env (Structure)
+SECRET_KEY=your_django_secret
+DEBUG=True
+ALLOWED_HOSTS=127.0.0.1,localhost
+STRIPE_PUBLIC_KEY=pk_test_...
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+JWT_SECRET_KEY=your_jwt_secret
+JWT_COOKIE_NAME=access_token
+ACTIVE_COOKIE_DOMAIN=localhost
+
+
+PostgreSQL Database :
+We are using PostgreSQL, a powerful open-source relational database, to store structured donor and payment data using well-designed Django models. Tables are linked using foreign key relationships (e.g. each donation links to a donor, and payments link to donations).
+
+We can access the database in two ways:
+	• Via SQL using psql CLI to run direct queries. 
+		# SQL terminal
+		psql -U postgres -d domaap_db
+
+	• Via Django ORM to safely query and update models in Python code.
+		# Django shell
+		from api.models import DonorModel
+		DonorModel.objects.filter(postcode='B10')
+
+
+Authentication & Security:
+
+This system implements JWT-based authentication with two supported flows:
+	• Cookie-based JWT – this is for the frontend browser access, stored securely as HttpOnly cookie.
+	• Header-based JWT – this is for mobile apps or API clients, passed via Authorization: Bearer <token> header.
+
+Webhook Security (Stripe): [Stripe Signature Verification - Stripe’s signed secret header]
+Stripe webhook endpoints are CSRF exempt and do not require JWT authentication, because they use Stripe’s signature verification mechanism for security.
+
+CSRF stands for Cross-Site Request Forgery
+
+Stripe Integration
+
+Supported Flows:
+
+	• One-Off Donations (/api/stripe/payment-intent/)
+	• Monthly Subscriptions (/api/stripe/subscription-intent/)
+	• Webhook endpoint:
+	POST /api/stripe/subscription-webhook/
+	POST /api/webhook/. ( Later, I will make a change to (/api/stripe/one-off-webhook/)
+
+
+
+	
+	Sample commands from CLI:
+	stripe listen --forward-to localhost:8000/api/stripe/subscription-webhook/
+	stripe trigger invoice.paid
+	stripe trigger invoice.payment_failed
+	
+
+
+Webhook Events Handled:
+
+	• invoice.paid
+	• invoice.payment_failed
+	• customer.subscription.deleted
+	• customer.subscription.updated
+
+
+
+Web Server Setup:
+
+The backend of this project is hosted on a GoDaddy VPS, providing full control over the deployment environment. To ensure secure and efficient request handling, we use a reliable combination of:
+
+	• NGINX (Engine X) – A high-performance web server that acts as a reverse proxy, efficiently forwarding incoming requests to the Django app, managing SSL (HTTPS), and serving static files.
+	• Gunicorn (WSGI Server) – A lightweight yet powerful Python WSGI HTTP server that runs the Django backend, handling application-level logic and database communication.
+
+WSGI - Web server gateway Interface (One configuration file)
+
+    NGINX (Reverse Proxy & SSL termination)
+    Gunicorn (WSGI server for Django)
+
+Email Integration :
+We are useing Gmail SMTP for sending emails such as donation confirmations and receipts, configured securely using Gmail App Passwords.
+
+Stripe Setup & Login :
+This project is integrated with Stripe in Test Mode for both one-off and monthly subscription payments.
+API keys (STRIPE_SECRET_KEY, STRIPE_PUBLISHABLE_KEY, STRIPE_WEBHOOK_SECRET) are configured via environment variables in .env, .env_ip, and .env_ngrok.
+
+Dashboard: https://dashboard.stripe.com/test
+
+Project Structure (Key Folders)
+# Folder Structure
+
+
+├── api/                            # Main application folder (contains all app logic)
+│   ├── models/                     # Django models for DB tables (Donors, Payments, etc.)
+│   ├── views/                      # API and Web views (request handlers)
+│   ├── serializers/                # Serializers for converting model data (for APIs)
+│   ├── services/                   # Business logic and integration services (Stripe, etc.)
+│   ├── management/                 # Custom management commands (e.g., backfill donations)
+│   ├── urls.py                     # Routes for API endpoints
+│   └── middleware.py               # Custom middleware (JWT auth, logging, etc.)
+├── donor_management/              # Project settings and root config
+│   └── settings.py                # Django settings (env handling, app config, DB)
+├── .env                           # Env vars for local development
+├── .env_ip                        # Env vars for IP-based deployment
+├── .env_ngrok                     # Env vars for ngrok public URL usage
+├── requirements.txt               # Python dependencies list
+
+
+
+Testing & Logs
+
+	• Use logs/application.log for debugging.
+	• Test Stripe flows in CLI with:
+    Installation
+	brew install stripe/stripe-cli/stripe
+    Then login:
+    stripe login
+
+    Triggering Events:
+    stripe listen --forward-to localhost:8000/api/stripe/subscription-webhook/
+    stripe listen --forward-to localhost:8000/api/stripe/webhook/
+
+    stripe trigger invoice.paid
+    stripe trigger payment_intent.succeeded
+    stripe trigger invoice.payment_failed
+
+
+
+External Webhook Testing : ngrok Tunneling 
+This project supports external webhook testing using ngrok, a secure tunnel tool that exposes your local server to the internet.
+
+Stripe requires a public HTTPS URL to send webhook events. While in local development, ngrok acts as a bridge between the local server (localhost:8000) and Stripe’s webhook delivery service.
+
+Browser → https://ngrok → NGINX (Localhost) → Django Backend → Stripe Webhook
+
+ Setup ngrok
+
+	1. Install ngrok
+Download and install from https://ngrok.com/download
+	2. Login & Auth Token Setup
+	ngrok config add-authtoken <your_token>
+
+	1. Start Tunnel
+Run this in your terminal:
+	2. ngrok http 8000
+
+
+Note : ALLOWED_HOSTS (needs to be updated)
+We are using paid version of ngrok subdomain and we have free domain as well.
+
+
+Backend Setup
+
+ 1. Installation Steps
+
+# Step 1: Clone the repository
+git clone https://github.com/nawaz5124/donor_management_github.git
+cd donor_management_github
+
+# Step 2: Create virtual environment & activate
+python3 -m venv venv
+source venv/bin/activate  # For Mac/Linux
+venv\Scripts\activate     # For Windows
+
+# Step 3: Install dependencies
+pip install -r requirements.txt
+
+# Step 4: Select the appropriate environment file
+cp .env_local .env  # Or .env_ip / .env_ngrok
+
+# Step 5: Run migrations
+python manage.py migrate
+
+# Step 6: Run server
+python manage.py runserver
+
+
+# Local HTTPS with mkcert : To support secure HTTPS during local development (required by services like Stripe), 
+this project uses mkcert to generate locally-trusted SSL certificates.
+
+
+mkcert (Make Certificate) and  certbot (Certificate Bot)
+	• Stands for: Make Certificate
+	• Purpose: Instantly creates trusted local development certificates for your machine (no browser warnings).
+	• Use Case:
+		○ Perfect for local development (localhost or local IPs).
+Allows HTTPS without needing a real domain or a certificate authority (CA).
+
+    • Installation:
+        ○ Install mkcert via Homebrew: brew install mkcert
+        ○ Install CA: mkcert -install
+        ○ Generate certificate: mkcert localhost
+
+ 1. Install mkcert
+    brew install mkcert
+    brew install nss  # Optional for Firefox
+    mkcert -install
+
+2. Generate Certificates
+    cd ~/ssl
+    mkcert localhost 127.0.0.1 ::1
+
+    It generates two files:
+	•	localhost+2.pem → This is your SSL certificate
+	•	localhost+2-key.pem → This is your private key
+
+    mv localhost+2.pem mkcert.crt
+    mv localhost+2-key.pem mkcert.key
+
+3. Use in NGINX
+
+ssl_certificate     /Users/nawazmohammed/ssl/mkcert.crt;
+ssl_certificate_key /Users/nawazmohammed/ssl/mkcert.key;
+
+certbot (Certificate Bot)
+
+	• Stands for: Certificate Bot (from the Let’s Encrypt project).
+	• Purpose:
+		○ Automates the process of getting free SSL certificates from Let’s Encrypt.
+		○ Helps you secure production websites on the internet.
+	• Use Case:
+		○ For real domains like example.com, hosted publicly.
+Ideal for production servers needing valid, globally trusted SSL certificates.
+
+
+Environment Setup - Commands, Versions & Descriptions
+
+python --version 	Python 3.13.5  	##### Core backend runtime. Required to run Django. 
+django-admin --version 	5.1.4    	##### Django framework version. Used to build the backend API.
+psql --version 	PostgreSQL 14.15 	##### Open-source SQL database. Installed via Homebrew.
+node -v v18.20.5 					##### JavaScript runtime for frontend (Next.js).
+npm -v 8.19.4 					 	##### Node package manager. Used to install frontend packages.
+stripe --version	1.27.0			##### Stripe CLI for testing webhook events locally.
+mkcert --version	v1.4.4			##### Generates trusted local SSL certs for HTTPS during development.
+gunicorn --version	21.2.0			##### WSGI HTTP server to run Django in production.
+nginx -v	nginx/1.27.5			##### Web server acting as a reverse proxy & SSL handler.
+
+
+ Django Superuser (Admin Panel Login)
+https://localhost:8000/admin/
+pwd : tesose@123
+
+

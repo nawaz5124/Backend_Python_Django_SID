@@ -1,0 +1,50 @@
+🔍 Loading environment variables from: /Users/nawazmohammed/Documents/donor_management/.env
+✅ $ENV_FILE .env file loaded successfully!
+🔧 Cookie Domain: 192.168.0.23, Secure: True, SameSite: None
+
+    🔧 Django Configuration Summary:
+    ──────────────────────────────────────────────
+    # ✅ Environment Variables
+    ENVIRONMENT             : local
+    ACTIVE_COOKIE_DOMAIN    : IP
+    DEBUG:                  : False    
+    BASE_BACKEND_URL        : https://localhost:8000
+    BACKEND_URL             : https://localhost:8000
+    ALLOWED_HOSTS           : ['localhost', '127.0.0.1', '192.168.0.23']
+    COOKIE_DOMAIN           : 192.168.0.23
+    COOKIE_DOMAIN_LOCAL     : localhost
+    COOKIE_DOMAIN_IP        : 192.168.0.23
+    COOKIE_DOMAIN_PROD      : cftdomaap-dev.camelfoundation.org
+    COOKIE_SECURE           : True
+    COOKIE_SAMESITE         : None
+    COOKIE_PATH             : /
+    API_SERVICE_USERNAME    : api_service_user
+    API_SERVICE_PASSWORD    : cft_D$maap_@786
+    POSTCODER_BASE_API_URL  : https://ws.postcoder.com/pcw/PCW5C-88ZXT-VJULH-B9HYX/address/UK
+    SHOW_CONFIG_SUMMARY     : True
+    
+    # ✅ Security & Middleware
+    CSRF_TRUSTED_ORIGINS    : ['https://localhost:3000', 'https://192.168.0.23:3000']
+    AUTHENTICATION_BACKENDS : ['django.contrib.auth.backends.ModelBackend']
+    CSP_CONNECT_SRC         : ["'self'", 'https://localhost:8000']
+    SECURE_REFERRER_POLICY  : strict-origin-when-cross-origin
+    SECURE_CONTENT_TYPE_NOSNIFF : True
+    SECURE_BROWSER_XSS_FILTER   : True
+    SECURE_SSL_REDIRECT         : True
+
+    # ✅ Cookies & Sessions
+    CSRF_COOKIE_SAMESITE    : None
+    SESSION_COOKIE_SAMESITE : None
+    CSRF_COOKIE_HTTPONLY    : True
+    SESSION_COOKIE_HTTPONLY : True
+    SESSION_COOKIE_SECURE   : True
+    CSRF_COOKIE_SECURE      : True
+    SESSION_ENGINE          : django.contrib.sessions.backends.signed_cookies
+
+    # ✅ Misc
+    DEFAULT_AUTO_FIELD      : django.db.models.BigAutoField
+    WSGI_APPLICATION        : donor_management.wsgi.application
+
+    ──────────────────────────────────────────────
+    
+DEBUG ENV FILE VALUE ACTIVE_COOKIE_DOMAIN = IP

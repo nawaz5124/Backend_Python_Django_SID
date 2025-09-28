@@ -1,0 +1,6 @@
+INFO 2025-06-05 17:46:45,286 frontend_logger_view [FRONTEND] 2025-06-05T16:10:00Z | 🧪 Test log from Postman
+WARNING 2025-06-05 17:46:45,286 frontend_logger_view [FRONTEND] 2025-06-05T16:10:05Z | ⚠️ Warning: Something suspicious
+ERROR 2025-06-05 17:46:45,287 frontend_logger_view [FRONTEND] 2025-06-05T16:10:10Z | ❌ Critical error on donation step
+INFO 2025-06-05 18:30:36,547 frontend_logger_view [FRONTEND] 2025-06-05T16:10:00Z | 🧪 Test log from Postman
+WARNING 2025-06-05 18:30:36,547 frontend_logger_view [FRONTEND] 2025-06-05T16:10:05Z | ⚠️ Warning: Something suspicious
+ERROR 2025-06-05 18:30:36,547 frontend_logger_view [FRONTEND] 2025-06-05T16:10:10Z | ❌ Critical error on donation step

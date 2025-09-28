@@ -1,0 +1,16 @@
+Line
+Why it matters
+venv/
+Don’t commit virtual environments
+__pycache__/, *.pyc
+Python bytecode (auto-generated)
+*.log
+Avoid cluttering repo with runtime logs
+.env, .env.*
+Keeps secrets (like DB and Stripe keys) out of GitHub
+*.sqlite3
+Local DB — not meant for prod
+node_modules/
+Should be excluded always — huge & platform-specific
+*.bak, *.zip
+Cleanup and accidental export files

@@ -1,0 +1,58 @@
+# Python
+venv/
+__pycache__/
+*.py[cod]
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# Django & DB
+*.log
+*.sqlite3
+db.sqlite3
+local_settings.py
+staticfiles/
+media/
+
+# Env & Secrets
+.env
+.env.*
+*.pem
+*.crt
+*.key
+
+# OS / IDE junk
+.DS_Store
+.idea/
+.vscode/
+
+# Node/JS (if using in backend folder)
+node_modules/
+*.zip
+*.tar.gz
+
+# Backups
+*.bak
+
+# Custom dev/test scripts (keep local only)
+assign_group_to_api_user.py_need_to_be_deleted
+create_api_user.py
+rotate_api_user_password.py
+scripts/
+
+# Requirements files
+requirements-*.txt
+!requirements.txt   # keep main one tracked
+# Env files
+.env
+.env.*
+.env_ip
+.env_ngrok
+
+# Env files
+.env
+.env.*
+.env_ip
+.env_ngrok

@@ -1,0 +1,23 @@
+from api.utils.stripe import create_payment_intent
+import logging
+
+logger = logging.getLogger(__name__)
+
+def create_stripe_payment_intent(donation):
+    """
+    Create a Stripe PaymentIntent and return the result.
+    """
+    try:
+        logger.info(f"Creating Stripe PaymentIntent for donation {donation.donation_id}")
+        payment_intent_data = {
+            "amount": int(donation.amount * 100),  # Convert to cents
+            "currency": "GBP",  # Hardcoded currency
+        }
+        payment_intent = create_payment_intent(**payment_intent_data)
+        logger.info(f"Stripe PaymentIntent created: {payment_intent['id']}")
+        return payment_intent
+    except Exception as e:
+        logger.error(f"Error creating Stripe PaymentIntent: {str(e)}")
+        raise
+
+    

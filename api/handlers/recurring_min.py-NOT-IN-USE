@@ -1,0 +1,226 @@
+# api/handlers/recurring_min.py
+import json
+import logging
+import uuid
+from decimal import Decimal, ROUND_HALF_UP
+
+from django.conf import settings
+from django.db import transaction
+from django.utils.timezone import now
+
+logger = logging.getLogger(__name__)
+
+# Allow donor auto-create only in dev by default (safe for manual/CLI tests)
+ALLOW_WEBHOOK_DONOR_AUTOCREATE = getattr(
+    settings, "ALLOW_WEBHOOK_DONOR_AUTOCREATE", settings.DEBUG
+)
+
+# --- Model imports (adjust to your project) ---
+try:
+    # If you use Api* models
+    from api.models.donations_model import ApiDonationModel as DonationModel
+    from api.models.payments_model import ApiPaymentModel as PaymentModel
+except Exception:
+    # Or the consolidated models
+    from api.models import DonationModel, PaymentModel
+
+# Donor model path — adjust if different in your project
+try:
+    from api.models.donor_model import DonorModel
+except Exception:
+    # Fallback if donor is under api.models
+    from api.models import DonorModel  # noqa: F401
+
+
+def _to_major(cents) -> Decimal:
+    if not cents:
+        return Decimal("0.00")
+    return (Decimal(cents) / Decimal(100)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def _split_name(full_name: str):
+    full_name = (full_name or "").strip()
+    if not full_name:
+        return ("Subscriber", "")
+    parts = full_name.split()
+    return (parts[0], " ".join(parts[1:]) if len(parts) > 1 else "")
+
+
+def _safe_email(customer_email: str, customer_id: str) -> str:
+    """
+    DonorModel.email is NOT NULL.
+    If Stripe didn't send an email, generate a stable placeholder using the customer_id.
+    """
+    if customer_email:
+        return customer_email
+    return f"{customer_id}@no-email.stripe.local"
+
+
+def _generate_cft_no() -> str:
+    """
+    Generate a readable unique donor PK if your model uses `cft_no` as PK (non-auto).
+    Used ONLY when auto-creating donors via webhook fallback.
+    """
+    return f"CFT-{now().strftime('%y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
+
+
+def handle_recurring_invoice(invoice: dict):
+    """
+    Create/ensure Donation + Payment from a Stripe invoice object.
+    - Idempotent by stripe_invoice_id
+    - Atomic DB writes
+    - No Stripe API calls
+    - STATUS: stored exactly as Stripe sends it (no mapping)
+    Returns (donation, payment) or (None, None).
+    """
+    if not isinstance(invoice, dict) or invoice.get("object") != "invoice":
+        logger.error("[Recurring] Invalid invoice payload")
+        return None, None
+
+    # ---- Extract once (single source of truth) ----
+    invoice_id        = invoice.get("id")
+    customer_id       = invoice.get("customer")
+    subscription_id   = invoice.get("subscription")
+    payment_intent_id = invoice.get("payment_intent")
+    charge_id         = invoice.get("charge")                   # may be None
+    invoice_status    = invoice.get("status")                   # verbatim (paid/open/draft/void/uncollectible/…)
+    billing_reason    = invoice.get("billing_reason") or "subscription_cycle"
+    currency          = (invoice.get("currency") or "gbp").upper()
+    invoice_url       = invoice.get("hosted_invoice_url") or None
+
+    # amount_paid when paid; else fall back to amount_due
+    amount_cents = invoice.get("amount_paid")
+    if amount_cents in (None, 0):
+        amount_cents = invoice.get("amount_due")
+    amount = _to_major(amount_cents)
+
+    if not invoice_id or not customer_id:
+        logger.error("[Recurring] Missing invoice_id or customer_id")
+        return None, None
+
+    # ---- Idempotency guards ----
+    existing_payment = PaymentModel.objects.filter(stripe_invoice_id=invoice_id).first()
+    existing_donation = DonationModel.objects.filter(stripe_invoice_id=invoice_id).first()
+    if existing_payment and existing_donation:
+        logger.info(f"[Recurring] Idempotent hit for invoice {invoice_id}")
+        return existing_donation, existing_payment
+
+    # ---- Resolve donor (reuse; minimal auto-create only if allowed) ----
+    donor = DonorModel.objects.filter(stripe_customer_id=customer_id).first()
+
+    if donor:
+        # Softly attach subscription id if donor doesn't have one yet
+        if subscription_id and getattr(donor, "stripe_subscription_id", None) in (None, "", "NA"):
+            try:
+                donor.stripe_subscription_id = subscription_id
+                donor.save(update_fields=["stripe_subscription_id"])
+            except Exception as e:
+                logger.warning(f"[Recurring] Could not update subscription_id for donor {getattr(donor, 'id', 'unknown')}: {e}")
+    else:
+        if not ALLOW_WEBHOOK_DONOR_AUTOCREATE:
+            logger.error(f"[Recurring] Donor missing for customer={customer_id}; auto-create disabled. Seed donor and retry.")
+            return None, None
+
+        first_name, last_name = _split_name(invoice.get("customer_name"))
+        email_value = _safe_email(invoice.get("customer_email"), customer_id)
+
+        field_names = {f.name for f in DonorModel._meta.fields}
+        create_kwargs = {
+            "stripe_customer_id": customer_id,
+            "first_name": first_name,
+            "last_name": last_name,
+            "email": email_value,  # <- never null now
+        }
+        if "stripe_subscription_id" in field_names:
+            create_kwargs["stripe_subscription_id"] = subscription_id
+
+        # If your PK is cft_no and not auto, generate one (fallback only).
+        pk_name = DonorModel._meta.pk.name
+        if pk_name == "cft_no" and "cft_no" in field_names and not create_kwargs.get("cft_no"):
+            create_kwargs["cft_no"] = _generate_cft_no()
+
+        attempts = 0
+        while True:
+            attempts += 1
+            try:
+                donor, created = DonorModel.objects.get_or_create(
+                    stripe_customer_id=customer_id,
+                    defaults=create_kwargs
+                )
+                if created:
+                    logger.info(f"[Recurring] Created donor for stripe_customer_id={customer_id}")
+                else:
+                    logger.info(f"[Recurring] Found existing donor for stripe_customer_id={customer_id}")
+                break
+            except Exception as e:
+                msg = str(e)
+                # Handle duplicate PK for cft_no by regenerating and retrying a couple of times
+                if attempts < 3 and "pkey" in msg.lower() and pk_name == "cft_no":
+                    create_kwargs["cft_no"] = _generate_cft_no()
+                    continue
+                logger.error(f"[Recurring] Could not get/create donor for {customer_id}: {e}")
+                return None, None
+
+    # ---- Inherit donation_type/cause from first sub donation (if any) ----
+    first = (
+        DonationModel.objects.filter(stripe_subscription_id=subscription_id)
+        .order_by("created_at")
+        .first()
+        if subscription_id
+        else None
+    )
+    donation_type  = getattr(first, "donation_type", "General")
+    donation_cause = getattr(first, "donation_cause", "General")
+
+    # ---- Prepare metadata_json (store raw invoice payload safely) ----
+    try:
+        metadata_json = json.dumps(invoice, ensure_ascii=False)
+    except TypeError:
+        # In case invoice contains non-serializable objects
+        metadata_json = json.dumps({"invoice_id": invoice_id}, ensure_ascii=False)
+
+    # ---- Atomic create/update ----
+    with transaction.atomic():
+        donation = existing_donation or DonationModel.objects.create(
+            donor=donor,
+            donation_type=donation_type,
+            donation_cause=donation_cause,
+            amount=amount,
+            donation_status=invoice_status,          # <- keep Stripe status verbatim
+            donation_frequency="Recurring",
+            payment_intent_id=payment_intent_id,     # PI may change each cycle
+            stripe_subscription_id=subscription_id,
+            subscription_status=None,                # set via subscription events
+            stripe_invoice_id=invoice_id,
+            created_at=now(),
+            updated_at=now(),
+        )
+
+        payment = existing_payment or PaymentModel.objects.create(
+            donation=donation,
+            transaction_id=charge_id,                # may be None
+            payment_intent_id=payment_intent_id,
+            payment_reference=invoice_id,            # stable per cycle
+            payment_status=invoice_status,           # <- keep Stripe status verbatim
+            amount=amount,
+            currency=currency,
+            payment_mode="Card",
+            invoice_url=invoice_url,
+            is_recurring=True,
+            stripe_customer_id=customer_id,
+            stripe_subscription_id=subscription_id,
+            stripe_invoice_id=invoice_id,
+            billing_reason=billing_reason,
+            subscription_status=None,                # set via subscription events
+            next_billing_date=None,                  # keep simple
+            metadata_json=metadata_json,
+            created_at=now(),
+            updated_at=now(),
+        )
+
+    logger.info(
+        f"[Recurring] OK invoice={invoice_id} "
+        f"donation_id={getattr(donation,'donation_id',None)} "
+        f"payment_id={getattr(payment,'payment_id',None)}"
+    )
+    return donation, payment
