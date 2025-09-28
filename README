@@ -5,7 +5,6 @@ A full-stack donation management platform with Stripe integration for one-off an
 
 
 Live and Development Links
-Production: https://camelfoundation.org  
 Development: https://cftdomaap-dev.camelfoundation.org  
 SIT/UAT with NGROK: https://camelfoundation-domaap.ngrok.app
 
@@ -85,9 +84,9 @@ Example .env (Structure)
 SECRET_KEY=your_django_secret
 DEBUG=True
 ALLOWED_HOSTS=127.0.0.1,localhost
-STRIPE_PUBLIC_KEY=pk_test_...
-STRIPE_SECRET_KEY=sk_test_...
-STRIPE_WEBHOOK_SECRET=whsec_...
+STRIPE_PUBLIC_KEY=...
+STRIPE_SECRET_KEY=_...
+STRIPE_WEBHOOK_SECRET=...
 JWT_SECRET_KEY=your_jwt_secret
 JWT_COOKIE_NAME=access_token
 ACTIVE_COOKIE_DOMAIN=localhost
@@ -320,6 +319,6 @@ nginx -v	nginx/1.27.5			##### Web server acting as a reverse proxy & SSL handler
 
  Django Superuser (Admin Panel Login)
 https://localhost:8000/admin/
-pwd : tesose@123
+
 
 
